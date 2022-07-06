@@ -133,9 +133,9 @@ files:
         println("Hello World!")
     }
   learner_created: false
-feedback_link: https://hyperskill.org/projects/222/stages/1112/implement#comment
+feedback_link: https://hyperskill.org/learn/step/17145#comment
 status: Solved
 feedback:
   message: Congratulations!
   time: Tue, 05 Jul 2022 14:49:42 UTC
-record: -1
+record: 1
