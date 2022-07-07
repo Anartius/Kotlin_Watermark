@@ -16,6 +16,12 @@ fun main() {
     checkImageFile(watermarkFileName, "watermark")
 
     compareImages(imageFileName, watermarkFileName)
+
+    var useAlpha = false
+    if (ImageIO.read(File(watermarkFileName)).transparency == 3) {
+        println("Do you want to use the watermark's Alpha channel?")
+        if (readln().lowercase() == "yes") useAlpha = true
+    }
     val weight = getWeight()
 
     println("Input the output image filename (jpg or png extension):")
@@ -26,7 +32,7 @@ fun main() {
         exitProcess(0)
     }
 
-    val outputImage = blendImages(imageFileName, watermarkFileName, weight)
+    val outputImage = blendImages(imageFileName, watermarkFileName, weight, useAlpha)
     saveImage(outputImage, outputFileName)
 }
 
@@ -39,7 +45,7 @@ fun checkImageFile(fileName: String, type: String) {
     }
 
     val image = ImageIO.read(file)
-    if (image.colorModel.numComponents != 3) {
+    if (image.colorModel.numColorComponents != 3) {
         println("The Number of $type color components isn't 3.")
         exitProcess(0)
     } else if (!(image.colorModel.pixelSize == 24 ||
@@ -56,9 +62,6 @@ fun compareImages(imageFileName: String, watermarkFileName: String) {
 
     if (!(image.width == watermark.width &&
                 image.height == watermark.height &&
-                image.colorModel.pixelSize == watermark.colorModel.pixelSize &&
-                image.colorModel.numComponents ==
-                watermark.colorModel.numComponents &&
                 image.colorModel.numColorComponents ==
                 watermark.colorModel.numColorComponents)) {
 
@@ -86,7 +89,8 @@ fun getWeight() : Int {
 
 fun blendImages(imageFileName: String,
                 watermarkFileName: String,
-                weight: Int) : BufferedImage {
+                weight: Int,
+                useAlpha: Boolean) : BufferedImage {
 
     val image = ImageIO.read(File(imageFileName))
     val watermark = ImageIO.read(File(watermarkFileName))
@@ -95,14 +99,18 @@ fun blendImages(imageFileName: String,
 
     for (x in 0 until image.width) {
         for (y in 0 until image.height) {
-            val iRGB = Color(image.getRGB(x, y))
-            val wRGB = Color(watermark.getRGB(x, y))
+            val iRGB = Color(image.getRGB(x, y), useAlpha)
+            val wRGB = Color(watermark.getRGB(x, y), useAlpha)
 
-            val color = Color(
-                (weight * wRGB.red + (100 - weight) * iRGB.red) / 100,
-                (weight * wRGB.green + (100 - weight) * iRGB.green) / 100,
-                (weight * wRGB.blue + (100 - weight) * iRGB.blue) / 100
-            )
+            val color = if (wRGB.alpha == 0) {
+                Color(iRGB.red, iRGB.green, iRGB.blue)
+            } else {
+                Color(
+                    (weight * wRGB.red + (100 - weight) * iRGB.red) / 100,
+                    (weight * wRGB.green + (100 - weight) * iRGB.green) / 100,
+                    (weight * wRGB.blue + (100 - weight) * iRGB.blue) / 100
+                )
+            }
             outputImage.setRGB(x, y, color.rgb)
         }
     }
@@ -119,16 +127,16 @@ fun saveImage(image: BufferedImage, fileName: String) {
 }
 
 
-fun printImageInfo(fileName: String) {
-    val transparency = mapOf(1 to "OPAQUE", 2 to "BITMASK", 3 to "TRANSLUCENT")
-    val image = ImageIO.read(File(fileName))
-    println("""
-        Image file: $fileName
-        Width: ${image.width}
-        Height: ${image.height}
-        Number of components: ${image.colorModel.numComponents}
-        Number of color components: ${image.colorModel.numColorComponents}
-        Bits per pixel: ${image.colorModel.pixelSize}
-        Transparency: ${transparency[image.transparency]}
-    """.trimIndent())
-}
+//fun printImageInfo(fileName: String) {
+//    val transparency = mapOf(1 to "OPAQUE", 2 to "BITMASK", 3 to "TRANSLUCENT")
+//    val image = ImageIO.read(File(fileName))
+//    println("""
+//        Image file: $fileName
+//        Width: ${image.width}
+//        Height: ${image.height}
+//        Number of components: ${image.colorModel.numComponents}
+//        Number of color components: ${image.colorModel.numColorComponents}
+//        Bits per pixel: ${image.colorModel.pixelSize}
+//        Transparency: ${transparency[image.transparency]}
+//    """.trimIndent())
+//}
