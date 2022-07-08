@@ -15,13 +15,22 @@ fun main() {
     val watermarkFileName = readln()
     checkImageFile(watermarkFileName, "watermark")
 
-    compareImages(imageFileName, watermarkFileName)
+    val image = ImageIO.read(File(imageFileName))
+    var watermark = ImageIO.read(File(watermarkFileName))
+    compareImages(image, watermark)
 
     var useAlpha = false
     if (ImageIO.read(File(watermarkFileName)).transparency == 3) {
         println("Do you want to use the watermark's Alpha channel?")
         if (readln().lowercase() == "yes") useAlpha = true
+    } else {
+        println("Do you want to set a transparency color?")
+        if (readln().lowercase() == "yes") {
+            watermark = addTransparency(watermark)
+            useAlpha = true
+        }
     }
+
     val weight = getWeight()
 
     println("Input the output image filename (jpg or png extension):")
@@ -32,7 +41,7 @@ fun main() {
         exitProcess(0)
     }
 
-    val outputImage = blendImages(imageFileName, watermarkFileName, weight, useAlpha)
+    val outputImage = blendImages(imageFileName, watermark , weight, useAlpha)
     saveImage(outputImage, outputFileName)
 }
 
@@ -56,9 +65,7 @@ fun checkImageFile(fileName: String, type: String) {
 }
 
 
-fun compareImages(imageFileName: String, watermarkFileName: String) {
-    val image = ImageIO.read(File(imageFileName))
-    val watermark = ImageIO.read(File(watermarkFileName))
+fun compareImages(image: BufferedImage, watermark: BufferedImage) {
 
     if (!(image.width == watermark.width &&
                 image.height == watermark.height &&
@@ -68,6 +75,44 @@ fun compareImages(imageFileName: String, watermarkFileName: String) {
         println("The image and watermark dimensions are different.")
         exitProcess(0)
     }
+}
+
+
+fun addTransparency(watermark: BufferedImage) : BufferedImage {
+    val image = BufferedImage(
+        watermark.width,
+        watermark.height,
+        BufferedImage.TYPE_INT_ARGB
+    )
+
+    println("Input a transparency color ([Red] [Green] [Blue]):")
+    val color = try {
+        val input = readln().split(" ").map { it.toInt() }.toList()
+        if (input.size != 3) throw NumberFormatException()
+        input.forEach { if (it !in 0..255) throw NumberFormatException() }
+        input
+    } catch (e: NumberFormatException) {
+        println("The transparency color input is invalid.")
+        exitProcess(0)
+    }
+
+    for (x in 0 until image.width) {
+        for (y in 0 until image.height) {
+            val wRGB = Color(watermark.getRGB(x, y))
+
+            if (
+                wRGB.red == color[0] &&
+                wRGB.green == color[1] &&
+                wRGB.blue == color[2]
+            ) {
+                image.setRGB(x, y, 0)
+            } else {
+                image.setRGB(x, y, wRGB.rgb)
+            }
+        }
+    }
+
+    return image
 }
 
 
@@ -88,13 +133,11 @@ fun getWeight() : Int {
 
 
 fun blendImages(imageFileName: String,
-                watermarkFileName: String,
+                watermark: BufferedImage,
                 weight: Int,
                 useAlpha: Boolean) : BufferedImage {
 
     val image = ImageIO.read(File(imageFileName))
-    val watermark = ImageIO.read(File(watermarkFileName))
-
     val outputImage = BufferedImage(image.width, image.height, image.type)
 
     for (x in 0 until image.width) {
