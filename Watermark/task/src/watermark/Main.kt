@@ -14,10 +14,12 @@ fun main() {
     println("Input the watermark image filename:")
     val watermarkFileName = readln()
     checkImageFile(watermarkFileName, "watermark")
-
     val image = ImageIO.read(File(imageFileName))
     var watermark = ImageIO.read(File(watermarkFileName))
-    compareImages(image, watermark)
+    if (watermark.width > image.width|| watermark.height > image.height) {
+        println("The watermark's dimensions are larger.")
+        exitProcess(0)
+    }
 
     var useAlpha = false
     if (ImageIO.read(File(watermarkFileName)).transparency == 3) {
@@ -32,6 +34,7 @@ fun main() {
     }
 
     val weight = getWeight()
+    val positions = getWatermarkPositions(image, watermark)
 
     println("Input the output image filename (jpg or png extension):")
     val outputFileName = readln()
@@ -41,8 +44,13 @@ fun main() {
         exitProcess(0)
     }
 
-    val outputImage = blendImages(imageFileName, watermark , weight, useAlpha)
-    saveImage(outputImage, outputFileName)
+    var outImage = blendImages(image, watermark , weight, useAlpha, positions[0])
+    if (positions.size > 1) {
+        for (i in 1 until positions.size) {
+            outImage = blendImages(outImage, watermark, weight, useAlpha, positions[i])
+        }
+    }
+    saveImage(outImage, outputFileName)
 }
 
 
@@ -60,19 +68,6 @@ fun checkImageFile(fileName: String, type: String) {
     } else if (!(image.colorModel.pixelSize == 24 ||
                 image.colorModel.pixelSize == 32)) {
         println("The $type isn't 24 or 32-bit.")
-        exitProcess(0)
-    }
-}
-
-
-fun compareImages(image: BufferedImage, watermark: BufferedImage) {
-
-    if (!(image.width == watermark.width &&
-                image.height == watermark.height &&
-                image.colorModel.numColorComponents ==
-                watermark.colorModel.numColorComponents)) {
-
-        println("The image and watermark dimensions are different.")
         exitProcess(0)
     }
 }
@@ -132,18 +127,82 @@ fun getWeight() : Int {
 }
 
 
-fun blendImages(imageFileName: String,
-                watermark: BufferedImage,
-                weight: Int,
-                useAlpha: Boolean) : BufferedImage {
+fun getWatermarkPositions(image: BufferedImage, watermark: BufferedImage) :
+        MutableList<List<Int>> {
 
-    val image = ImageIO.read(File(imageFileName))
-    val outputImage = BufferedImage(image.width, image.height, image.type)
+    println("Choose the position method (single, grid):")
+    return when (readln()) {
+        "single" -> {
+            val xMax = image.width - watermark.width
+            val yMax = image.height - watermark.height
+            println("Input the watermark position ([x 0-$xMax] [y 0-$yMax]):")
 
-    for (x in 0 until image.width) {
-        for (y in 0 until image.height) {
+            return try {
+                val position = readln().split(" ").map { it.toInt() }
+                    .toList()
+                if (position.size != 2) throw NumberFormatException()
+                if (position[0] !in 0..xMax || position[1] !in 0..yMax) {
+                    println("The position input is out of range.")
+                    exitProcess(0)
+                }
+                mutableListOf(position)
+            } catch (e: NumberFormatException) {
+                println("The position input is invalid.")
+                exitProcess(0)
+            }
+        }
+
+        "grid" -> {
+            getPositions(image, watermark)
+        }
+
+        else -> {
+            println("The position method input is invalid.")
+            exitProcess(0)
+        }
+    }
+}
+
+
+fun getPositions(image: BufferedImage, watermark: BufferedImage) :
+        MutableList<List<Int>> {
+
+    val result = mutableListOf<List<Int>>()
+    val xSteps = image.width / watermark.width
+    val ySteps = image.height / watermark.height
+
+    for (i in 0..xSteps) {
+        for (j in 0..ySteps) {
+            result.add(listOf(i * watermark.width, j * watermark.height))
+        }
+    }
+    return result
+}
+
+
+fun blendImages(
+    image: BufferedImage,
+    watermark: BufferedImage,
+    weight: Int,
+    useAlpha: Boolean,
+    position: List<Int>
+): BufferedImage {
+
+    val xMax = if (position[0] + watermark.width < image.width) {
+        position[0] + watermark.width
+    } else image.width - 1
+
+    val yMax = if (position[1] + watermark.height < image.height) {
+        position[1] + watermark.height
+    } else image.height - 1
+
+    for (x in position[0] until xMax) {
+        for (y in position[1] until yMax) {
             val iRGB = Color(image.getRGB(x, y), useAlpha)
-            val wRGB = Color(watermark.getRGB(x, y), useAlpha)
+            val wRGB = Color(
+                watermark.getRGB(x - position[0], y - position[1]),
+                useAlpha
+            )
 
             val color = if (wRGB.alpha == 0) {
                 Color(iRGB.red, iRGB.green, iRGB.blue)
@@ -154,11 +213,11 @@ fun blendImages(imageFileName: String,
                     (weight * wRGB.blue + (100 - weight) * iRGB.blue) / 100
                 )
             }
-            outputImage.setRGB(x, y, color.rgb)
+            image.setRGB(x, y, color.rgb)
         }
     }
 
-    return outputImage
+    return image
 }
 
 
@@ -168,18 +227,3 @@ fun saveImage(image: BufferedImage, fileName: String) {
     ImageIO.write(image, extension,file)
     println("The watermarked image $fileName has been created.")
 }
-
-
-//fun printImageInfo(fileName: String) {
-//    val transparency = mapOf(1 to "OPAQUE", 2 to "BITMASK", 3 to "TRANSLUCENT")
-//    val image = ImageIO.read(File(fileName))
-//    println("""
-//        Image file: $fileName
-//        Width: ${image.width}
-//        Height: ${image.height}
-//        Number of components: ${image.colorModel.numComponents}
-//        Number of color components: ${image.colorModel.numColorComponents}
-//        Bits per pixel: ${image.colorModel.pixelSize}
-//        Transparency: ${transparency[image.transparency]}
-//    """.trimIndent())
-//}
